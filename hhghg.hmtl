@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Minecraft Commands (Safe + Chaos)</title>
+  <style>
+    body { font-family: system-ui, Arial; margin: 20px; }
+    h1 { margin: 0 0 10px; }
+    .small { color:#666; font-size:12px; margin: 0 0 14px; }
+    .top { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom: 14px; }
+    input, button, a.btn {
+      padding: 10px 12px; border-radius: 12px; border: 1px solid #ccc; background: #fff;
+      text-decoration: none; color: #111;
+    }
+    button:hover, a.btn:hover { background:#f3f3f3; cursor:pointer; }
+    input { width: 100%; max-width: 520px; }
+    .section { margin-top: 18px; }
+    .section h2 { margin: 0 0 10px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+    .card { border: 1px solid #e5e5e5; border-radius: 14px; padding: 12px; }
+    .title { font-weight:700; margin-bottom:8px; }
+    pre {
+      margin: 0 0 10px; padding: 10px; background:#f7f7f7; border-radius: 12px;
+      white-space: pre-wrap; word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+    }
+    .row { display:flex; gap:8px; flex-wrap:wrap; }
+    .pill {
+      display:inline-block; padding: 4px 8px; border-radius: 999px;
+      border: 1px solid #ddd; background:#fafafa; font-size: 12px; color:#444;
+      margin-left: 6px;
+    }
+    .hr { height: 1px; background:#eee; margin: 18px 0; }
+  </style>
+</head>
+<body>
+  <h1>Minecraft Commands</h1>
+  <p class="small">
+    Safe + Chaos separated. Each command has its own Copy button (including “THE EVENT” steps).
+  </p>
+
+  <div class="top">
+    <input id="filter" placeholder="Filter (type to search)..." />
+    <button id="copyVisible">Copy ALL visible</button>
+  </div>
+
+  <div class="section">
+    <h2>Safe / Utility</h2>
+    <div class="grid" id="safeGrid"></div>
+  </div>
+
+  <div class="hr"></div>
+
+  <div class="section">
+    <h2>Chaos</h2>
+    <div class="grid" id="chaosGrid"></div>
+  </div>
+
+  <script>
+    // ---- DATA ----
+    const SAFE = [
+      { label: "SPEED BOOST (self)", cmd: "/effect @s speed 1000000 9 true" },
+      { label: "CLEAR WEATHER", cmd: "/weather clear" },
+      { label: "SET DAY", cmd: "/time set day" },
+      { label: "SET NIGHT", cmd: "/time set night" },
+      { label: "FULL HEAL (regen + saturation)", cmd: "/effect @s regeneration 10 10 true" },
+      { label: "FULL HEAL (saturation)", cmd: "/effect @s saturation 10 10 true" },
+      { label: "NIGHT VISION (5 min)", cmd: "/effect @s night_vision 300 1 true" },
+      { label: "REMOVE ALL EFFECTS (self)", cmd: "/effect @s clear" },
+      { label: "KEEP INVENTORY ON", cmd: "/gamerule keepinventory true" },
+      { label: "KEEP INVENTORY OFF", cmd: "/gamerule keepinventory false" },
+      { label: "GAMEMODE CREATIVE (self)", cmd: "/gamemode creative" },
+      { label: "GAMEMODE SURVIVAL (self)", cmd: "/gamemode survival" },
+      { label: "CLEAR INVENTORY (self)", cmd: "/clear @s" },
+      { label: "SPAWNPOINT HERE (self)", cmd: "/spawnpoint @s ~ ~ ~" }
+    ];
+
+    const CHAOS = [
+      { label: "LAVA AREA AROUND PLAYER", cmd: "/fill ~-9 ~-9 ~-9 ~9 ~9 ~9 lava" },
+      { label: "WITHER ON PLAYERS", cmd: "/execute at @a run summon wither ~ ~10 ~" },
+      { label: "FIRE AREA", cmd: "/fill ~-30 ~ ~-30 ~30 ~ ~30 fire" },
+      { label: "REMOVE FLOOR", cmd: "/fill ~-5 ~-1 ~-5 ~5 ~-1 ~5 air" },
+      { label: "SEND TO THE SKY!", cmd: "/effect @a levitation 5 50" },
+      { label: "TO INFINITY AND BEYOND!", cmd: "/tp @a ~ ~255 ~70" },
+
+      // THE EVENT split into separate copyable steps (one-by-one)
+      { label: "THE EVENT (1/5) - Title", cmd: "/title @a title THE EVENT" },
+      { label: "THE EVENT (2/5) - Blindness", cmd: "/effect @a blindness 90 1" },
+      { label: "THE EVENT (3/5) - Nausea", cmd: "/effect @a nausea 90 5" },
+      { label: "THE EVENT (4/5) - Remove floor", cmd: "/execute at @a run fill ~-3 ~-1 ~-3 ~3 ~-1 ~3 air" },
+      { label: "THE EVENT (5/5) - TNT finale", cmd: "/execute at @a run summon tnt ~ ~-5 ~" }
+    ];
+
+    // ---- UI ----
+    const safeGrid = document.getElementById("safeGrid");
+    const chaosGrid = document.getElementById("chaosGrid");
+    const filter = document.getElementById("filter");
+    const copyVisibleBtn = document.getElementById("copyVisible");
+
+    async function copyToClipboard(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (e) {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand("copy");
+        ta.remove();
+        return ok;
+      }
+    }
+
+    function makeCard(item, category) {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.dataset.category = category;
+      card.dataset.label = item.label.toLowerCase();
+      card.dataset.cmd = item.cmd.toLowerCase();
+
+      const title = document.createElement("div");
+      title.className = "title";
+      title.textContent = item.label;
+
+      const pill = document.createElement("span");
+      pill.className = "pill";
+      pill.textContent = category;
+      title.appendChild(pill);
+
+      const pre = document.createElement("pre");
+      pre.textContent = item.cmd;
+
+      const row = document.createElement("div");
+      row.className = "row";
+
+      const btn = document.createElement("button");
+      btn.textContent = "Copy";
+      btn.onclick = async () => {
+        const ok = await copyToClipboard(item.cmd);
+        btn.textContent = ok ? "Copied!" : "Copy failed";
+        setTimeout(() => (btn.textContent = "Copy"), 900);
+      };
+
+      row.appendChild(btn);
+      card.appendChild(title);
+      card.appendChild(pre);
+      card.appendChild(row);
+
+      return card;
+    }
+
+    function render() {
+      safeGrid.innerHTML = "";
+      chaosGrid.innerHTML = "";
+
+      const q = (filter.value || "").toLowerCase().trim();
+
+      const safeShown = SAFE.filter(i =>
+        !q || i.label.toLowerCase().includes(q) || i.cmd.toLowerCase().includes(q)
+      );
+      const chaosShown = CHAOS.filter(i =>
+        !q || i.label.toLowerCase().includes(q) || i.cmd.toLowerCase().includes(q)
+      );
+
+      for (const item of safeShown) safeGrid.appendChild(makeCard(item, "SAFE"));
+      for (const item of chaosShown) chaosGrid.appendChild(makeCard(item, "CHAOS"));
+
+      if (!safeShown.length) safeGrid.innerHTML = `<div class="small">No matches in Safe.</div>`;
+      if (!chaosShown.length) chaosGrid.innerHTML = `<div class="small">No matches in Chaos.</div>`;
+    }
+
+    copyVisibleBtn.onclick = async () => {
+      // Copy ALL currently visible commands (safe + chaos) into one clipboard blob
+      const cards = Array.from(document.querySelectorAll(".card"));
+      const visible = cards.filter(c => c.offsetParent !== null); // displayed
+      const lines = visible.map(c => c.querySelector("pre").textContent);
+      const text = lines.join("\n\n"); // spaced out
+      const ok = await copyToClipboard(text);
+      copyVisibleBtn.textContent = ok ? "Copied ALL!" : "Copy ALL failed";
+      setTimeout(() => (copyVisibleBtn.textContent = "Copy ALL visible"), 900);
+    };
+
+    filter.addEventListener("input", render);
+    render();
+  </script>
+</body>
+</html>
